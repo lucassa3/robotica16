@@ -2,6 +2,8 @@ from pylab import *
 from numpy import *
 from PIL import Image
 
+import cv2
+
 ### Extracted from Programming Computer Vision With Python, by Jan Solem
 ### http://programmingcomputervision.com/
 
@@ -11,7 +13,53 @@ from PIL import Image
 
 # If you have PCV installed, these imports should work
 from PCV.geometry import homography, camera
-from PCV.localdescriptors import sift
+import sift
+
+
+
+# Stuff for sift
+FLANN_INDEX_KDTREE = 0
+index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
+search_params = dict(checks = 50)
+flann = cv2.FlannBasedMatcher(index_params, search_params)
+MIN_MATCH_COUNT = 10
+
+
+def find_homography(kp1, des1, kp2, des2):
+    """
+        Given a set of keypoints and descriptors finds the homography
+    """
+    # Tenta fazer a melhor comparacao usando o algoritmo
+    matches = flann.knnMatch(des1, des2, k=2)
+
+    # store all the good matches as per Lowe's ratio test.
+    good = []
+    for m,n in matches:
+        if m.distance < 0.7*n.distance:
+            good.append(m)
+
+    if len(good)>MIN_MATCH_COUNT:
+        # Separa os bons matches na origem e no destino
+        src_pts = np.float32([ kp1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
+        dst_pts = np.float32([ kp2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
+
+
+        # Tenta achar uma trasformacao composta de rotacao, translacao e escala que situe uma imagem na outra
+        M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,5.0)
+        matchesMask = mask.ravel().tolist()
+
+        h,w = img1.shape
+        pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
+
+        # Transforma os pontos da imagem origem para onde estao na imagem destino
+        dst = cv2.perspectiveTransform(pts,M)
+
+        return M
+    else:
+        # Caso em que nao houve matches o suficiente
+        return -1
+
+
 
 """
 This is the augmented reality and pose estimation cube example from Section 4.3.
@@ -60,25 +108,31 @@ def my_calibration(sz):
     K[1,2] = 0.5*row
     return K
 
+img0_name = "montgomery_800_600.jpg"
+img1_name = "montgomery_floor_800_600.jpg"
 
 
-# compute features
-sift.process_image('./data/book_frontal.JPG','im0.sift')
-l0,d0 = sift.read_features_from_file('im0.sift')
-
-sift.process_image('./data/book_perspective.JPG','im1.sift')
-l1,d1 = sift.read_features_from_file('im1.sift')
+img0 = cv2.imread(img0_name)
+print("Input cv image", img0.shape)
+img0 = cv2.cvtColor(img0, cv2.COLOR_BGR2GRAY)
 
 
-# match features and estimate homography
-matches = sift.match_twosided(d0,d1)
-ndx = matches.nonzero()[0]
-fp = homography.make_homog(l0[ndx,:2].T)
-ndx2 = [int(matches[i]) for i in ndx]
-tp = homography.make_homog(l1[ndx2,:2].T)
+cv_sift = cv2.SIFT()
 
-model = homography.RansacModel()
-H, inliers = homography.H_from_ransac(fp,tp,model)
+
+img1 = cv2.imread(img1_name)
+img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+
+kp0, desc0 = cv_sift.detectAndCompute(img0, None)
+kp1, desc1 = cv_sift.detectAndCompute(img1, None)
+
+
+# We use OpenCV instead of the calculus of the homography present in the book
+H = find_homography(kp0, desc0, kp1, desc1)
+
+
+# Note: always resize image to 747 x 1000 or change the K below
+
 
 # camera calibration
 K = my_calibration((747,1000))
@@ -107,20 +161,23 @@ box_cam2 = cam2.project(homography.make_homog(box))
 
 
 # plotting
-im0 = array(Image.open('book_frontal.JPG'))
-im1 = array(Image.open('book_perspective.JPG'))
+im0 = array(Image.open(img0_name))
+im1 = array(Image.open(img1_name))
 
-
+figure()
+imshow(im0)
 plot(box_cam1[0,:],box_cam1[1,:],linewidth=3)
 title('2D projection of bottom square')
 axis('off')
 
-
+figure()
+imshow(im1)
 plot(box_trans[0,:],box_trans[1,:],linewidth=3)
 title('2D projection transfered with H')
 axis('off')
 
-
+figure()
+imshow(im1)
 plot(box_cam2[0,:],box_cam2[1,:],linewidth=3)
 title('3D points projected in second image')
 axis('off')
