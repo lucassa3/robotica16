@@ -23,6 +23,11 @@ search_params = dict(checks = 50)
 flann = cv2.FlannBasedMatcher(index_params, search_params)
 MIN_MATCH_COUNT = 10
 
+goal_x = int(raw_input("defina seu objetivo em x"))
+goal_y = int(raw_input("defina seu objetivo em y"))
+goal_z = int(raw_input("defina seu objetivo em z"))
+
+
 
 def find_homography(kp1, des1, kp2, des2):
     """
@@ -171,15 +176,19 @@ def my_calibration(sz):
     """
     Calibration function for the camera (iPhone4) used in this example.
     """
+    d_X = 17
+    d_Y = 25
+    d_Z = 20
+    
     row,col = sz
-    fx = 2555*col/2592
-    fy = 2586*row/1936
+    fx = 584*col/800 #Resultado do calculo fx
+    fy = 560*row/600 #resultado do calculo fy
     K = diag([fx,fy,1])
     K[0,2] = 0.5*col
     K[1,2] = 0.5*row
     return K
 
-img0_name = "montgomery_800_600.jpg"
+img0_name = "IMG_2036_800_600.jpg"
 
 img0bgr = cv2.imread(img0_name)
 print("Input cv image", img0bgr.shape)
@@ -220,7 +229,7 @@ while(True):
 
     # Note: always resize image to 747 x 1000 or change the K below
     # camera calibration
-    K = my_calibration((747,1000))
+    K = my_calibration((600,800))
 
     # 3D points at plane z=0 with sides of length 0.2
     box = cube_points([0,0,0.1],0.1)
@@ -255,22 +264,52 @@ while(True):
     #Draws the cube on top of the image
     first = points2d[0]
     for p in points2d[1:]:
-        cv2.line(img1bgr, first, p, (0,0,255), 3, cv2.CV_AA)
+        cv2.line(img1bgr, first, p, (0,255,0), 3, cv2.CV_AA)
         first = p
 
 
     # Extract camera, rotation and translation matrices
     Km, Rm, Tm = cam2.factor()
-    print("Camera")
-    print(Km)
+#    print("Camera")
+#    print(Km)
 
     #print("Rotation")
     #print(Rm)
     phi, theta, psi = mat2euler(Rm)
-    print("Rotation: {0:.2f} , {1:.2f}, {2:.2f}".format(math.degrees(phi), math.degrees(theta), math.degrees(psi)))
+#    print("Rotation: {0:.2f} , {1:.2f}, {2:.2f}".format(math.degrees(phi), math.degrees(theta), math.degrees(psi)))
 
-    print("Translation")
-    print(Tm)
+#    print("Translation")
+#    print(Tm)
+    
+    ####################################################
+    
+    dist_x = Tm[0]*20
+    dist_y = Tm[1]*20
+    dist_z = Tm[2]*20
+    
+    
+    
+    
+    
+    if  goal_x - dist_x >-4 and goal_x - dist_x <4:
+        if  goal_y - dist_x >-4 and goal_y - dist_y <4:
+            if  goal_z - dist_z >-4 and goal_z - dist_z <4:
+                print("chegou!")
+        
+    else:
+        print("sua coordenada atual e de " + str(dist_x) + "cm no eixo x")
+        print("sua coordenada atual e de " + str(dist_y) + "cm no eixo y")
+        print("sua coordenada atual e de " + str(dist_z) + "cm no eixo z")
+        print("mova seu objeto em " + str(goal_x - dist_x) + "cm em x")
+        print("mova seu objeto em " + str(goal_y - dist_y) + "cm em y")
+        print("mova seu objeto em " + str(goal_z - dist_z) + "cm em z")
+    
+    
+    
+    
+    
+    
+    
 
     cv2.imshow('Aperte Q', img1bgr)
     if cv2.waitKey(1) & 0xFF == ord('q'):
